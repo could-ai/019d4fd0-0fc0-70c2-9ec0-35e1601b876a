@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase. The URL and Anon Key are provided by the environment.
+  await Supabase.initialize(
+    url: const String.fromEnvironment('SUPABASE_URL'),
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY'),
+  );
+  
   runApp(const StoryGeneratorApp());
 }
 
@@ -38,32 +47,47 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   final TextEditingController _promptController = TextEditingController();
   String _generatedStory = "";
   bool _isGenerating = false;
-  String _selectedGenre = "Romance";
+  String _selectedGenre = "Erotica";
 
   final List<String> _genres = [
+    "Erotica",
     "Romance",
-    "Fantasy",
+    "Dark Fantasy",
     "Sci-Fi",
     "Mystery",
     "Drama",
     "Adventure"
   ];
 
-  void _generateStory() async {
+  Future<void> _generateStory() async {
     if (_promptController.text.isEmpty) return;
 
     setState(() {
       _isGenerating = true;
-      _generatedStory = "";
+      _generatedStory = "Connecting to AI...";
     });
 
-    // Simulate network delay for AI generation
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final supabase = Supabase.instance.client;
+      // Invoke the Supabase Edge Function
+      final response = await supabase.functions.invoke(
+        'generate-story',
+        body: {
+          'prompt': _promptController.text,
+          'genre': _selectedGenre,
+        },
+      );
 
-    setState(() {
-      _isGenerating = false;
-      _generatedStory = "This is a placeholder for the generated story based on your prompt: '${_promptController.text}'. \n\nTo implement actual AI generation, you would connect this frontend to a backend service (like Supabase Edge Functions) that interfaces with an AI API (e.g., OpenAI, Anthropic, or a custom uncensored model) that fits your content requirements.";
-    });
+      setState(() {
+        _isGenerating = false;
+        _generatedStory = response.data['story'] ?? 'No story generated.';
+      });
+    } catch (e) {
+      setState(() {
+        _isGenerating = false;
+        _generatedStory = 'Error generating story: $e\n\nNote: Please ensure you have set the AI_API_KEY secret in your Supabase project dashboard (Edge Functions -> Secrets).';
+      });
+    }
   }
 
   @override
@@ -76,7 +100,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Story Creator'),
+        title: const Text('Unrestricted AI Story Creator'),
         centerTitle: true,
         elevation: 2,
       ),
@@ -117,7 +141,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
               maxLines: 4,
               decoration: const InputDecoration(
                 labelText: 'Story Prompt',
-                hintText: 'Describe the characters, setting, and plot...',
+                hintText: 'Describe the characters, setting, and plot in detail...',
                 border: OutlineInputBorder(),
                 alignLabelWithHint: true,
               ),
@@ -158,7 +182,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                   ),
                 ),
                 child: SingleChildScrollView(
-                  child: Text(
+                  child: SelectableText(
                     _generatedStory.isEmpty
                         ? 'Your story will appear here...'
                         : _generatedStory,
